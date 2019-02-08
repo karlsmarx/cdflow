@@ -78,7 +78,7 @@ const createTriggers = async (triggers, repositorie) => {
 
 	// For each trigger, generate a new trigger build in GCloud
 	await Promise.all(triggers.map(async (trigger) => {
-		// Instatntiate a new trigger clas to guarantee the data
+		// Instantiate a new trigger clas to guarantee the data
 		const newTrigger = new Classes.Trigger({
 			description: trigger.description,
 			triggerTemplate: new Classes.TriggerTemplate({
@@ -130,6 +130,8 @@ const generateProject = async () => {
 	}
 
 	if (!enabledServices) throw Error("ERR_UNABLE_TO_ENABLE_SERVICES");
+
+	result.enabledServices = enabledServices;
 	animation.stop();
 	successLog("Services enabled.");
 
@@ -194,6 +196,7 @@ const generateProject = async () => {
 			const encryptedData = await kms.encryptData(sshKey, kmsData.location, kmsData.keyRing, kmsData.cryptoKey);
 
 			await fs.writeFileSync(`${__dirname}/ssh-key.enc`, encryptedData);
+			result.sshKey = `${__dirname}/ssh-key`;
 			successLog(`ssh-key created and encrypted. Location: ${__dirname}/ssh-key.enc`);
 		} catch (err) {
 			errorLog(err.message);
@@ -227,9 +230,12 @@ const generateProject = async () => {
 
 	successLog("Final Result: SUCCESS.");
 	normalLog("");
+
+	return result;
 };
 
 generateProject()
+	.then(result => normalLog(result))
 	.catch((err) => {
 		errorLog(err.message);
 		normalLog("");
