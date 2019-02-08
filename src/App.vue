@@ -1,28 +1,35 @@
 <template>
   <div id="app">
-    <img alt="Vue logo" src="./assets/logo.png">
-    <HelloWorld msg="Welcome to Your Vue.js App"/>
+		<Header></Header>
+		<LastArticles v-bind="{ Articles: this.listArticles() }"></LastArticles>
   </div>
 </template>
 
 <script>
-import HelloWorld from './components/HelloWorld.vue'
+	import Header from '@/components/Header.vue'
+	import LastArticles from '@/components/LastArticles.vue'
 
-export default {
-  name: 'app',
-  components: {
-    HelloWorld
-  }
-}
+	export default {
+		components: {
+			Header,
+			LastArticles,
+		},
+		data() {
+			return {
+			}
+		},
+		methods: {
+			getArticle: async () => {},
+			listArticles: () => {
+				const result = [];
+				result.push({
+					id: 0,
+					title: "Fique rico ou morra tentando",
+					content: "A 50 cent movie."
+				});
+
+				return result;
+			}
+		}
+	};
 </script>
-
-<style>
-#app {
-  font-family: 'Avenir', Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  color: #2c3e50;
-  margin-top: 60px;
-}
-</style>
