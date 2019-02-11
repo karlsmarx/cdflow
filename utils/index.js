@@ -4,6 +4,7 @@ const Iam = require("./gcloud_iam.js");
 const Kms = require("./gcloud_kms.js");
 const ServiceUsage = require("./gcloud_serviceUsage.js");
 const Source = require("./gcloud_source.js");
+const KeyGen = require("./keyGen.js");
 
 module.exports = {
 	Build,
@@ -12,4 +13,5 @@ module.exports = {
 	Kms,
 	ServiceUsage,
 	Source,
+	KeyGen,
 };

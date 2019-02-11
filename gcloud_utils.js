@@ -5,10 +5,11 @@ const path = require("path");
 const fs = require("fs");
 const exec = require("await-exec");
 const chalkAnimation = require("chalk-animation");
+const utf8 = require("utf8");
 
 const { google } = require("googleapis");
 
-const {	Source,	Kms, Build,	Compute, ServiceUsage } = require("./utils"); // eslint-disable-line
+const {	Source,	Kms, Build,	Compute, ServiceUsage, KeyGen } = require("./utils"); // eslint-disable-line
 
 const Classes = require("./classes.js");
 
@@ -111,7 +112,7 @@ const generateProject = async () => {
 
 	const services = new ServiceUsage(key);
 	normalLog("Enabling services.");
-	const animation = chalkAnimation.karaoke("Waiting for GCloud response...");
+	const animation = chalkAnimation.glitch("Waiting for GCloud response...");
 
 	// try one time and again after 90 seconds
 	// TODO animate console waiting
@@ -125,7 +126,7 @@ const generateProject = async () => {
 				if (enabledServices.metadata.resourceNames.length > 3) resolve(true);
 
 				reject(false); // eslint-disable-line
-			}, 90000);
+			}, 30000);
 		});
 	}
 
@@ -188,20 +189,17 @@ const generateProject = async () => {
 		successLog(`Crypto-key {${kmsData.cryptoKey}} created.`);
 
 		// If build file has a true generateSSH option, creates a new ssh_key and ecrypt with kms (TESTING)
-		try {
-			normalLog("Generating ssh-key.");
-			await exec(`ssh-keygen -t rsa -C "${key.client_email}" -f ${__dirname}/ssh-key`);
+		normalLog("Generating ssh-key.");
+		const keyPair = await KeyGen.generateKeys(key.client_email);
 
-			const sshKey = fs.readFileSync(`${__dirname}/ssh-key`);
-			const encryptedData = await kms.encryptData(sshKey, kmsData.location, kmsData.keyRing, kmsData.cryptoKey);
+		const encryptedData = await kms.encryptData(keyPair.privateKey, kmsData.location, kmsData.keyRing, kmsData.cryptoKey);
+		console.log(encryptedData);
 
-			await fs.writeFileSync(`${__dirname}/ssh-key.enc`, encryptedData);
-			result.sshKey = `${__dirname}/ssh-key`;
-			successLog(`ssh-key created and encrypted. Location: ${__dirname}/ssh-key.enc`);
-		} catch (err) {
-			errorLog(err.message);
-			warningLog("Couldn't create ssh-key. Create a ssh-key pair then run the command in https://cloud.google.com/kms/docs/encrypt-decrypt#kms-howto-encrypt-cli.");
-		}
+		await fs.writeFileSync(path.resolve("./ssh_key.enc"), encryptedData.ciphertext);
+		await fs.writeFileSync(path.resolve("./ssh_key.pub"), keyPair.publicKey);
+
+		result.sshKey = path.resolve("./ssh_key");
+		successLog(`ssh-key created and encrypted. Location: ${path.resolve("./ssh-key.enc")}`);
 	}
 
 	// Create a new VM
@@ -237,6 +235,15 @@ const generateProject = async () => {
 generateProject()
 	.then(result => normalLog(result))
 	.catch((err) => {
-		errorLog(err.message);
+		if (err.message === "Requested entity already exists") {
+			if (err.config.url.includes("sourcerepo")) {
+				const { name } = JSON.parse(err.config.data);
+				const repoName = name.split("/");
+				errorLog(`Repository { ${repoName[repoName.length - 1]} } already exists in { ${repoName[1]} } project.`);
+			}
+		}
+
+		console.log(err);
+
 		normalLog("");
 	});

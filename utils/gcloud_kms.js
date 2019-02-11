@@ -71,7 +71,10 @@ module.exports = class {
 	async encryptData(plaintext, location, keyRing, cryptoKey) {
 		const path = this.client.cryptoKeyPathPath(this.projectId, location, keyRing, cryptoKey);
 
-		const response = await this.client.encrypt({ name: path, plaintext });
+		const response = await this.client.encrypt({
+			name: path,
+			plaintext: Buffer.from(plaintext).toString("base64"),
+		});
 		return response[0];
 	}
 };
