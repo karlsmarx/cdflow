@@ -54,6 +54,19 @@ module.exports = class {
 		return result.data;
 	}
 
+	async upgradeAddress(address, region) {
+		const result = await google.compute("v1").addresses.insert({
+			auth: this.JWT,
+			project: this.projectId,
+			region,
+			requestBody: { ...address },
+		});
+
+		if (result.statusText !== "OK") throw Error("ERR_UPGRADE_IP");
+
+		return true;
+	}
+
 	// Statical IP's need to be created manually
 	async createVM({
 		zone = "southamerica-east1-a",
@@ -72,11 +85,10 @@ module.exports = class {
 			name: vm.name,
 			url: vm.url,
 			operation: {
-				id: operationResult.id,
-				name: operationResult.name,
-				type: operationResult.type,
-				user: operationResult.user,
-				targetLink: operationResult.targetLink,
+				id: operationResult[0].id,
+				name: operationResult[0].name,
+				user: operationResult[0].user,
+				targetLink: operationResult[0].targetLink,
 			},
 		};
 
@@ -85,12 +97,49 @@ module.exports = class {
 
 	// TODO make internal and external ips from vm static
 
+	async getVm(vm) {
+		const foundVm = await google.compute("v1").instances.get({
+			auth: this.JWT,
+			instance: vm.name,
+			project: this.projectId,
+			zone: vm.zone,
+		});
+
+		const {
+			id,
+			creationTimestamp,
+			status,
+			zone,
+			networkInterfaces,
+			disks,
+			selfLink,
+		} = foundVm.data;
+
+		const info = {
+			id: foundVm.data.id,
+			name: foundVm.data.name,
+			url: foundVm.url,
+			metadata: {
+				id,
+				creationTimestamp,
+				status,
+				zone,
+				networkInterfaces,
+				disks,
+				selfLink,
+			},
+		};
+
+		return info;
+	}
+
 	async listVMs() {
 		const vms = await this.compute.getVMs();
 
 		const result = [];
 		vms.forEach((vm) => {
 			vm.forEach((insideVm) => {
+				console.log(insideVm.metadata.networkInterfaces);
 				const {
 					id, creationTimestamp, status, zone, networkInterfaces, disks, selfLink,
 				} = insideVm.metadata;
@@ -109,32 +158,6 @@ module.exports = class {
 		});
 
 		return result;
-	}
-
-	// List VM addresses i think
-	async listVMAddress() {
-		const addresses = await this.compute.getAddresses();
-
-		const infos = [];
-		addresses.forEach((address) => {
-			address.forEach((insideAddress) => {
-				const {
-					id, kind, creationTimestamp, name, address, status, addressType,
-				} = insideAddress.metadata;
-
-				const info = {
-					id: insideAddress.id,
-					name: insideAddress.name,
-					metadata: {
-						id, kind, creationTimestamp, name, address, status, addressType,
-					},
-				};
-
-				infos.push(info);
-			});
-		});
-
-		return infos;
 	}
 
 	// List of available regions

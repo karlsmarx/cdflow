@@ -122,8 +122,7 @@ const generateProject = async () => {
 		await new Promise((resolve, reject) => {
 			setTimeout(async () => {
 				enabledServices = await services.batchEnable([servicesList], projectData.projectNumber);
-				console.log(enabledServices);
-				if (enabledServices.metadata.resourceNames.length > 3) resolve(true);
+				if (enabledServices.metadata && enabledServices.metadata.resourceNames.length > 3) resolve(true);
 
 				reject(false); // eslint-disable-line
 			}, 30000);
@@ -193,7 +192,6 @@ const generateProject = async () => {
 		const keyPair = await KeyGen.generateKeys(key.client_email);
 
 		const encryptedData = await kms.encryptData(keyPair.privateKey, kmsData.location, kmsData.keyRing, kmsData.cryptoKey);
-		console.log(encryptedData);
 
 		await fs.writeFileSync(path.resolve("./ssh_key.enc"), encryptedData.ciphertext);
 		await fs.writeFileSync(path.resolve("./ssh_key.pub"), keyPair.publicKey);
@@ -222,6 +220,37 @@ const generateProject = async () => {
 
 	const createdVm = await compute.createVM({ name: vm.name, zone: vm.zone, vmInfo });
 	result.vm = createdVm;
+
+	let networks;
+	if (vm.networks) {
+		const vmData = await compute.getVm(vm);
+		networks = vmData.metadata.networkInterfaces;
+
+		if (vm.networks.internalIp) {
+			const { name } = vm.networks.internalIp;
+			const ip = networks[0].networkIP;
+
+			await compute.upgradeAddress({
+				name,
+				address: ip,
+				addressType: "INTERNAL",
+			}, "southamerica-east1");
+
+			vmInfo.internalIp = ip;
+		}
+
+		if (vm.networks.externalIp) {
+			const { name } = vm.networks.externalIp;
+			const ip = networks[0].accessConfigs.natIP;
+
+			await compute.upgradeAddress({
+				name,
+				address: ip,
+			}, "southamerica-east1");
+
+			vmInfo.externalIp = ip;
+		}
+	}
 
 	animation.stop();
 	successLog(`VM {${vm.name}} created.`);

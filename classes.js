@@ -6,7 +6,6 @@ const Resource = class {
 	}) {
 		this.name = name;
 
-		if (addressType) this.addressType = addressType;
 		if (subnetwork) this.subnetwork = subnetwork;
 	}
 };

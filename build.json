@@ -1,0 +1,42 @@
+{
+	"keyFilename": "example.json",
+	"serviceAccount": {
+		"name": "name"
+	},
+	"repositorie": {
+		"name": "repositorie15"
+	},
+	"triggers": [{
+		"description": "description",
+		"filename": "cloudbuild.yaml",
+		"generateFile": "JSON | YAML",
+		"substituitions": [{
+			"_NODE_ENV": "dev"
+		}, {
+			"_PORT_BINDING": "29000:8090"
+		}],
+		"branchName": "master | /regex/"
+	}],
+	"kms": {
+		"keyRing": "novo-keyring15",
+		"cryptoKey": "nova-chave15",
+		"location": "southamerica-east1",
+		"purpose": "ENCRYPT_DECRYPT"
+	},
+	"vm": {
+		"name": "docker-14",
+		"zone": "southamerica-east1-b",
+		"os": "container-vm",
+		"http": true,
+		"https": true,
+		"machineType": "f1-micro",
+		"networks": {
+			"internalIp": {
+				"name": "internal-ip"
+			},
+			"externalIp": {
+				"name": "external-ip"
+			}
+		}
+	}
+}
