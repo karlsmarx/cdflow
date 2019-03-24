@@ -1,4 +1,3 @@
-// TODO examine all responses to get some interessant returns
 const KMS = require("@google-cloud/kms");
 
 module.exports = class {

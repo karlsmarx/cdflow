@@ -3,29 +3,26 @@
 const args = require("args");
 const path = require("path");
 const fs = require("fs");
-const exec = require("await-exec");
-const chalkAnimation = require("chalk-animation");
-const utf8 = require("utf8");
 
 const { google } = require("googleapis");
 
-const {	Source,	Kms, Build,	Compute, ServiceUsage, KeyGen } = require("./utils"); // eslint-disable-line
+const {
+	Iam,
+	Source,
+	Kms,
+	Build,
+	Compute,
+	ServiceUsage,
+	KeyGen,
+} = require("./utils"); // eslint-disable-line
 
 const Classes = require("./classes.js");
 
-// Style for logs
-const normalLog = message => console.log("\x1b[37m", message);
-const successLog = message => console.log("\x1b[32m", message);
-const warningLog = message => console.log("\x1b[33m", message);
-const errorLog = message => console.log("\x1b[31m", message);
-
 // Create the args definition for input
 args
+	.option("api-key", "The API key file")
 	.option("build-file", "The build definition JSON", "build.json")
-	.option("api-key", "The API key file", null);
-
-// TODO use a temporary account
-// .option("keep", "Indicates that the generated key should be saved", false)
+	.option("keep", "Indicates that the generated key should be saved");
 
 const flags = args.parse(process.argv);
 
@@ -43,9 +40,10 @@ if (flags.apiKey) {
 	keyFilename = path.resolve(buildFile.keyFilename); // eslint-disable-line
 }
 
-const key = require(keyFilename); // eslint-disable-line
+let key = require(keyFilename); // eslint-disable-line
 if (!key) throw Error("ERR_NULL_KEY_FILENAME");
 
+// Creates a new Prject and return his data or read the data from keyFile default project
 const getProjectData = async () => {
 	const JWT = new google.auth.JWT(key.client_email, null, key.private_key, "https://www.googleapis.com/auth/cloud-platform");
 
@@ -61,18 +59,44 @@ const servicesToEnable = () => {
 	const services = [];
 
 	Object.keys(buildFile).forEach((buildKey) => {
-		if (buildKey === "repositorie") services.push("sourcerepo.googleapis.com");
+		if (buildKey === "serviceAccount") services.push("iam.googleapis.com");
+		if (buildKey === "repository") services.push("sourcerepo.googleapis.com");
 		if (buildKey === "triggers") services.push("cloudbuild.googleapis.com");
 		if (buildKey === "kms") services.push("cloudkms.googleapis.com");
 		if (buildKey === "vm") services.push("compute.googleapis.com");
-
-		// TODO activate IAM for use temporary servicce account
 	});
 
 	return services;
 };
 
-const createTriggers = async (triggers, repositorie) => {
+const enableServices = async (servicesList) => {
+	// Read project from keyFile
+	const projectData = await getProjectData();
+
+	const services = new ServiceUsage(key);
+	console.log("Enabling services.");
+
+	// try one time and again after 60 seconds to gap with API SLO
+	let enabledServices = await services.batchEnable(servicesList, projectData.projectNumber);
+
+	if (!enabledServices.metadata || enabledServices.metadata.resourceNames.length < 4) {
+		await new Promise((resolve, reject) => {
+			setTimeout(async () => {
+				enabledServices = await services.batchEnable(servicesList, projectData.projectNumber);
+				if (enabledServices.metadata && enabledServices.metadata.resourceNames.length > 3) resolve(true);
+
+				reject(false); // eslint-disable-line
+			}, 60000);
+		});
+	}
+
+	if (!enabledServices) throw Error("ERR_UNABLE_TO_ENABLE_SERVICES");
+	console.log("Services enabled.");
+
+	return enabledServices;
+};
+
+const createTriggers = async (triggers, repository) => {
 	const build = new Build(key);
 
 	const createdTriggers = [];
@@ -84,7 +108,7 @@ const createTriggers = async (triggers, repositorie) => {
 			description: trigger.description,
 			triggerTemplate: new Classes.TriggerTemplate({
 				projectId: key.project_id,
-				repoName: repositorie.name,
+				repoName: repository.name,
 				branchName: trigger.branchName,
 			}),
 		});
@@ -94,7 +118,7 @@ const createTriggers = async (triggers, repositorie) => {
 
 		// Create a new trigger in GCloud a save data to return
 		const response = await build.createTrigger(newTrigger);
-		successLog(`Trigger {${newTrigger.description}}  created.`);
+		console.log(`Trigger {${newTrigger.description}}  created.`);
 		createdTriggers.push(response);
 	}));
 
@@ -104,59 +128,49 @@ const createTriggers = async (triggers, repositorie) => {
 const generateProject = async () => {
 	const result = {};
 
-	// Get project data with number
-	const projectData = await getProjectData();
-
 	// Enable API's to use
 	const servicesList = await servicesToEnable();
+	result.enabledServices = await enableServices(servicesList);
 
-	const services = new ServiceUsage(key);
-	normalLog("Enabling services.");
-	const animation = chalkAnimation.glitch("Waiting for GCloud response...");
+	// Create a service account for admin the used resources in next steps
+	if (buildFile.serviceAccount) {
+		console.log("Creating service account");
+		const iam = new Iam(key);
 
-	// try one time and again after 90 seconds
-	// TODO animate console waiting
-	let enabledServices = await services.batchEnable([servicesList], projectData.projectNumber);
+		const createdAccount = await iam.createServiceAccount(buildFile.serviceAccount.name);
+		result.createdAccount = createdAccount;
 
-	if (!enabledServices.metadata || enabledServices.metadata.resourceNames.length < 4) {
-		await new Promise((resolve, reject) => {
-			setTimeout(async () => {
-				enabledServices = await services.batchEnable([servicesList], projectData.projectNumber);
-				if (enabledServices.metadata && enabledServices.metadata.resourceNames.length > 3) resolve(true);
+		const serviceKey = await iam.createServiceKey(createdAccount.uniqueId);
+		if (flags.keep) fs.writeFileSync(path.resolve(flags.keep), serviceKey.JSON);
 
-				reject(false); // eslint-disable-line
-			}, 30000);
-		});
+		console.log("Creating service role.");
+		const newRole = new Classes.Role({});
+		const createdRole = await iam.createRole("CDFlowRole", newRole);
+
+		console.log("Setting up role to service account.");
+		await iam.setPolicy(createdRole.name, createdAccount.email);
+
+		console.log("Service account created and configured.");
 	}
 
-	if (!enabledServices) throw Error("ERR_UNABLE_TO_ENABLE_SERVICES");
-
-	result.enabledServices = enabledServices;
-	animation.stop();
-	successLog("Services enabled.");
-
-	// Create a new Cloud Source repositorie
+	// Create a new Cloud Source repository
 	const sources = new Source(key);
-	const { repositorie } = buildFile;
+	const { repository } = buildFile;
 
-	normalLog(`Creating the {${repositorie.name}} repositorie.`);
-	animation.start();
+	console.log(`Creating the {${repository.name}} repository.`);
 
-	const createdRepositorie = await sources.createRepositorie(repositorie.name);
-	result.repositorie = createdRepositorie;
+	const createdRepository = await sources.createRepository(repository.name);
+	result.repository = createdRepository;
 
-	animation.stop();
-	successLog("Repositorie created.");
+	console.log("repository created.");
 
-	// Create triggers for source repositorie
-	normalLog("Creating triggers.");
-	animation.start();
+	// Create triggers for source repository
+	console.log("Creating triggers.");
 
-	const createdTriggers = await createTriggers(buildFile.triggers, repositorie);
+	const createdTriggers = await createTriggers(buildFile.triggers, repository);
 	result.triggers = createdTriggers;
 
-	animation.stop();
-	successLog("Triggers created.");
+	console.log("Triggers created.");
 
 	// If has a kms data, create the new key-ring and crypto-key
 	if (buildFile.kms) {
@@ -169,26 +183,21 @@ const generateProject = async () => {
 		// Get the data form build-file and creates a keyring and crypto-key
 		const kmsData = buildFile.kms;
 
-		normalLog("Creating key-ring.");
-		animation.start();
+		console.log("Creating key-ring.");
 
 		const newKeyRing = await kms.createKeyRing(kmsData.keyRing, kmsData.location);
 		result.keyRing = newKeyRing;
 
-		animation.stop();
-		successLog(`Key-ring {${kmsData.keyRing}} created.`);
-
-		normalLog("Creating crypto-key.");
-		animation.start();
+		console.log(`Key-ring {${kmsData.keyRing}} created.`);
+		console.log("Creating crypto-key.");
 
 		const newCryptoKey = await kms.createKey(kmsData.cryptoKey, kmsData.keyRing, kmsData.location);
 		result.cryptoKey = newCryptoKey;
 
-		animation.stop();
-		successLog(`Crypto-key {${kmsData.cryptoKey}} created.`);
+		console.log(`Crypto-key {${kmsData.cryptoKey}} created.`);
 
 		// If build file has a true generateSSH option, creates a new ssh_key and ecrypt with kms (TESTING)
-		normalLog("Generating ssh-key.");
+		console.log("Generating ssh-key.");
 		const keyPair = await KeyGen.generateKeys(key.client_email);
 
 		const encryptedData = await kms.encryptData(keyPair.privateKey, kmsData.location, kmsData.keyRing, kmsData.cryptoKey);
@@ -197,13 +206,12 @@ const generateProject = async () => {
 		await fs.writeFileSync(path.resolve("./ssh_key.pub"), keyPair.publicKey);
 
 		result.sshKey = path.resolve("./ssh_key");
-		successLog(`ssh-key created and encrypted. Location: ${path.resolve("./ssh-key.enc")}`);
+		console.log(`ssh-key created and encrypted. Location: ${path.resolve("./ssh-key.enc")}`);
 	}
 
 	// Create a new VM
-	// TODO promove internal and external ips
-	normalLog("Creating virtual machine.");
-	animation.start();
+	// TODO promove external ips
+	console.log("Creating virtual machine.");
 
 	const compute = new Compute({
 		projectId: key.project_id,
@@ -236,7 +244,7 @@ const generateProject = async () => {
 				addressType: "INTERNAL",
 			}, "southamerica-east1");
 
-			vmInfo.internalIp = ip;
+			result.vm.internalIp = ip;
 		}
 
 		if (vm.networks.externalIp) {
@@ -246,33 +254,33 @@ const generateProject = async () => {
 			await compute.upgradeAddress({
 				name,
 				address: ip,
+				addressType: "EXTERNAL",
 			}, "southamerica-east1");
 
-			vmInfo.externalIp = ip;
+			result.vm.externalIp = ip;
 		}
 	}
 
-	animation.stop();
-	successLog(`VM {${vm.name}} created.`);
+	console.log(`VM {${vm.name}} created.`);
 
-	successLog("Final Result: SUCCESS.");
-	normalLog("");
+	console.log("Final Result: SUCCESS.");
+	console.log("");
 
 	return result;
 };
 
 generateProject()
-	.then(result => normalLog(result))
+	.then(result => console.log(result))
 	.catch((err) => {
 		if (err.message === "Requested entity already exists") {
 			if (err.config.url.includes("sourcerepo")) {
 				const { name } = JSON.parse(err.config.data);
 				const repoName = name.split("/");
-				errorLog(`Repository { ${repoName[repoName.length - 1]} } already exists in { ${repoName[1]} } project.`);
+				console.log(`Repository { ${repoName[repoName.length - 1]} } already exists in { ${repoName[1]} } project.`);
 			}
+		} else {
+			console.log(err.message);
 		}
 
-		console.log(err);
-
-		normalLog("");
+		console.log("");
 	});

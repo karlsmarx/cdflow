@@ -8,10 +8,12 @@ module.exports = class {
 		this.projectId = key.project_id;
 
 		this.JWT = new google.auth.JWT(key.client_email, null, key.private_key, "https://www.googleapis.com/auth/cloud-platform");
-		// TODO Refactoring to share JWT and function
 	}
 
 	async createServiceAccount(name) {
+		if (name.length < 6 || name.length > 30) throw Error("ERR_NAME_LENGTH");
+		if (!(/^[a-z][a-z\d\-]*[a-z\d]/g).test(name)) throw Error("ERR_NAME_CHARS");
+
 		const response = await google.iam("v1").projects.serviceAccounts.create({
 			auth: this.JWT,
 			name: `projects/${this.projectId}`,
@@ -32,11 +34,13 @@ module.exports = class {
 			name: `projects/${this.projectId}/serviceAccounts/${account}`,
 		});
 
-		const decoded = new Buffer(response.data.privateKeyData, "base64").toString("ascii");
+		const decoded = Buffer.from(response.data.privateKeyData, "base64").toString("ascii");
 		return { name: response.data.name, JSON: decoded };
 	}
 
 	async createRole(name, role) {
+		if (!(/^[a-zA-Z0-9_\.]{3,64}$/g).test(name)) throw Error("ERR_INVALID_ROLE_NAME");
+
 		const response = await google.iam("v1").projects.roles.create({
 			auth: this.JWT,
 			parent: `projects/${this.projectId}`,
@@ -50,9 +54,9 @@ module.exports = class {
 	}
 
 	async setPolicy(role, member) {
-		const response = await google.cloudresourcemanager("v1").projects.setIamPolicy({
+		const response = await google.iam("v1").projects.serviceAccounts.setIamPolicy({
 			auth: this.JWT,
-			resource: `projects/${this.projectId}/`,
+			resource: `projects/${this.projectId}/serviceAccounts/${member}`,
 			requestBody: {
 				policy: {
 					bindings: [{

@@ -19,3 +19,9 @@ yarn-error.log*
 *.njsproj
 *.sln
 *.sw*
+
+# GCloud keyfile
+tests/key.json
+tests/generatedKey.json
+*.enc
+*.pub

@@ -1,10 +1,10 @@
 {
-	"keyFilename": "example.json",
+	"keyFilename": "key.json",
 	"serviceAccount": {
-		"name": "name"
+		"name": "service"
 	},
-	"repositorie": {
-		"name": "repositorie15"
+	"repository": {
+		"name": "repositorie16"
 	},
 	"triggers": [{
 		"description": "description",
@@ -18,13 +18,13 @@
 		"branchName": "master | /regex/"
 	}],
 	"kms": {
-		"keyRing": "novo-keyring15",
-		"cryptoKey": "nova-chave15",
+		"keyRing": "novo-keyring",
+		"cryptoKey": "nova-chave",
 		"location": "southamerica-east1",
 		"purpose": "ENCRYPT_DECRYPT"
 	},
 	"vm": {
-		"name": "docker-14",
+		"name": "docker-01",
 		"zone": "southamerica-east1-b",
 		"os": "container-vm",
 		"http": true,

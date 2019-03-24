@@ -8,7 +8,7 @@ module.exports = class {
 		this.JWT = new google.auth.JWT(key.client_email, null, key.private_key, "https://www.googleapis.com/auth/cloud-platform");
 	}
 
-	async createRepositorie(name) {
+	async createRepository(name) {
 		if (!name) throw Error("INVALID_NAME");
 
 		const response = await google.sourcerepo("v1").projects.repos.create({

@@ -11,12 +11,8 @@
     "@google-cloud/compute": "^0.11.0",
     "@google-cloud/kms": "^0.3.0",
     "args": "^5.0.0",
-    "await-exec": "^0.1.2",
-    "chalk-animation": "^1.6.0",
     "googleapis": "^36.0.0",
-    "path": "^0.12.7",
-    "request-promise": "^4.2.2",
-    "utf8": "^3.0.0"
+    "path": "^0.12.7"
   },
   "devDependencies": {
     "chai": "^4.2.0",
@@ -25,7 +21,6 @@
     "eslint": "^5.8.0",
     "eslint-config-airbnb-base": "^13.1.0",
     "eslint-plugin-import": "^2.16.0",
-    "eslint-plugin-vue": "^5.0.0-0",
     "mocha": "^5.2.0"
   }
 }

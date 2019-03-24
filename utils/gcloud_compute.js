@@ -95,7 +95,7 @@ module.exports = class {
 		return result;
 	}
 
-	// TODO make internal and external ips from vm static
+	// TODO make external ips from vm static
 
 	async getVm(vm) {
 		const foundVm = await google.compute("v1").instances.get({
